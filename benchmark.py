@@ -492,8 +492,8 @@ def run_all_benchmarks():
     """Run all benchmarks."""
     print("\n")
     print("╔" + "="*98 + "╗")
-    print("║" + " "*20 + "FACTORIZATION LIBRARY BENCHMARK SUITE" + " "*40 + "║")
-    print("║" + f" SIMD Available: {str(is_simd_available())} {' '*77} " + "║")
+    print("║" + " "*20 + "FACTORIZATION LIBRARY BENCHMARK SUITE" + " "*41 + "║")
+    print("║" + f" SIMD Available: {str(is_simd_available())} {' '*75} " + "║")
     print("╚" + "="*98 + "╝")
     
     try:
