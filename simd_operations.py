@@ -14,19 +14,19 @@ OPTIMIZATION TARGETS:
 
 import numpy as np
 import math
-from typing import Tuple, List
+from typing import Tuple, List, Callable, Any, Optional
 
 # Try to import Numba for JIT compilation
 try:
     from numba import njit, vectorize
-    NUMBA_AVAILABLE = True
+    NUMBA_AVAILABLE: bool = True
 except ImportError:
-    NUMBA_AVAILABLE = False
+    NUMBA_AVAILABLE: bool = False
     # Fallback decorator (no-op)
-    def njit(func):
+    def njit(func: Callable[..., Any]) -> Callable[..., Any]:
         return func
-    def vectorize(signature):
-        def decorator(func):
+    def vectorize(signature: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             return func
         return decorator
 
@@ -91,11 +91,11 @@ def _batch_inverse_simd(values: List[int], n: int, use_numpy: bool = True) -> Li
         return _batch_inverse_pure_python(values, n)
     
     # Convert to NumPy for bulk operations
-    values_arr = np.asarray(values, dtype=np.int64)
+    values_arr: np.ndarray = np.asarray(values, dtype=np.int64)
     
     # Forward pass: compute cumulative products (vectorized)
-    cumprod = np.empty(len(values_arr), dtype=np.int64)
-    acc = 1
+    cumprod: np.ndarray = np.empty(len(values_arr), dtype=np.int64)
+    acc: int = 1
     for i in range(len(values_arr)):
         if values_arr[i] % n != 0:
             acc = (acc * values_arr[i]) % n
@@ -110,19 +110,19 @@ def _batch_inverse_simd(values: List[int], n: int, use_numpy: bool = True) -> Li
     # Compute inverse of final accumulated product (single inversion)
     try:
         # Convert to int for pow() to work properly
-        inv_acc = pow(int(cumprod[-1]), -1, n)
+        inv_acc: int = pow(int(cumprod[-1]), -1, n)
     except (ValueError, TypeError):
         # Not invertible
         return [0] * len(values_arr)
     
     # Backward pass: distribute inverse (vectorized)
-    result = np.zeros(len(values_arr), dtype=np.int64)
-    inv_acc_curr = inv_acc
+    result: np.ndarray = np.zeros(len(values_arr), dtype=np.int64)
+    inv_acc_curr: int = inv_acc
     
     for i in range(len(values_arr) - 1, -1, -1):
         if values_arr[i] % n != 0:
             # result[i] = (cumprod[i-1] * inv_acc_curr) % n
-            prev_prod = cumprod[i - 1] if i > 0 else 1
+            prev_prod: int = cumprod[i - 1] if i > 0 else 1
             result[i] = (prev_prod * inv_acc_curr) % n
             inv_acc_curr = (inv_acc_curr * values_arr[i]) % n
     
@@ -143,8 +143,8 @@ def _batch_inverse_pure_python(values: List[int], n: int) -> List[int]:
     if not values:
         return []
     
-    result = [0] * len(values)
-    acc = 1
+    result: List[int] = [0] * len(values)
+    acc: int = 1
     
     # Forward pass: compute cumulative products
     for i in range(len(values)):
@@ -159,7 +159,7 @@ def _batch_inverse_pure_python(values: List[int], n: int) -> List[int]:
         return [0] * len(values)
     
     try:
-        inv_acc = pow(acc, -1, n)
+        inv_acc: int = pow(acc, -1, n)
     except ValueError:
         return [0] * len(values)
     
@@ -335,7 +335,7 @@ def _ecm_phase2_simd(
     a: int,
     small_primes: List[int],
     batch_size: int = 8
-) -> int | None:
+) -> Optional[int]:
     """
     Phase 2 with vectorized prime processing.
     
@@ -355,7 +355,7 @@ def _ecm_phase2_simd(
         Factor if found, None otherwise
     """
     # Filter primes in phase 2 range
-    phase2_primes = np.array(
+    phase2_primes: np.ndarray = np.array(
         [p for p in small_primes if B1 < p <= B2],
         dtype=np.int64
     )
@@ -367,18 +367,22 @@ def _ecm_phase2_simd(
     if len(phase2_primes) < 10:
         return None  # Fall back to scalar Phase 2
     
+    current_x: int
+    current_z: int
     current_x, current_z = point
     
     # Process primes in batches
     for i in range(0, len(phase2_primes), batch_size):
-        batch = phase2_primes[i:i + batch_size]
-        batch_len = len(batch)
+        batch: np.ndarray = phase2_primes[i:i + batch_size]
+        batch_len: int = len(batch)
         
         # Replicate point for batch (create array with same point repeated)
-        x_arr = np.full(batch_len, current_x, dtype=np.int64)
-        z_arr = np.full(batch_len, current_z, dtype=np.int64)
+        x_arr: np.ndarray = np.full(batch_len, current_x, dtype=np.int64)
+        z_arr: np.ndarray = np.full(batch_len, current_z, dtype=np.int64)
         
         # Vectorized scalar multiplications for each prime in batch
+        x_result: np.ndarray
+        z_result: np.ndarray
         x_result, z_result = _ecm_scalar_mult_simd(
             int(batch[0]), 
             np.array([x_arr, z_arr], dtype=np.int64),
@@ -388,7 +392,7 @@ def _ecm_phase2_simd(
         
         # Check all results for factors
         for j in range(batch_len):
-            g = math.gcd(int(z_result[j]), n)
+            g: int = math.gcd(int(z_result[j]), n)
             if 1 < g < n:
                 return g
     
@@ -418,23 +422,23 @@ if NUMBA_AVAILABLE:
     @njit
     def mod_exp_simd(bases: np.ndarray, exp: int, n: int) -> np.ndarray:
         """JIT-compiled modular exponentiation for multiple bases."""
-        result = np.ones(len(bases), dtype=np.int64)
+        result: np.ndarray = np.ones(len(bases), dtype=np.int64)
         for i in range(len(bases)):
             result[i] = pow(bases[i], exp, n)
         return result
 else:
     # Fallback implementations without Numba
-    def mod_add(a, b, n):
+    def mod_add(a: int, b: int, n: int) -> int:
         return (a + b) % n
     
-    def mod_sub(a, b, n):
+    def mod_sub(a: int, b: int, n: int) -> int:
         return (a - b) % n
     
-    def mod_mul(a, b, n):
+    def mod_mul(a: int, b: int, n: int) -> int:
         return (a * b) % n
     
     def mod_exp_simd(bases: np.ndarray, exp: int, n: int) -> np.ndarray:
-        result = np.ones(len(bases), dtype=np.int64)
+        result: np.ndarray = np.ones(len(bases), dtype=np.int64)
         for i in range(len(bases)):
             result[i] = pow(bases[i], exp, n)
         return result
@@ -447,3 +451,18 @@ else:
 def is_simd_available() -> bool:
     """Check if SIMD operations are available (Numba installed)."""
     return NUMBA_AVAILABLE
+
+__all__: List[str] = [
+    '_trial_division_simd',
+    '_batch_inverse_simd',
+    '_batch_inverse_pure_python',
+    '_ecm_point_double_simd',
+    '_ecm_point_add_simd',
+    '_ecm_scalar_mult_simd',
+    '_ecm_phase2_simd',
+    'mod_add',
+    'mod_sub',
+    'mod_mul',
+    'mod_exp_simd',
+    'is_simd_available'
+]

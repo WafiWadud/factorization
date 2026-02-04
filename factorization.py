@@ -30,6 +30,7 @@ import random
 import math
 from multiprocessing import Pool, cpu_count
 from functools import partial, lru_cache
+from typing import List, Tuple, Optional, Dict, Union
 
 import numpy as np
 from simd_operations import (
@@ -43,29 +44,29 @@ from simd_operations import (
 )
 
 # Global process pool for reuse (avoid creation overhead)
-_pool = None
-_pool_size = 4
+_pool: Optional[Pool] = None
+_pool_size: int = 4
 
 # Pre-computed primes in contiguous memory (faster cache performance)
-_SMALL_PRIMES_LIMIT = 10000
-_small_primes_cache = None
+_SMALL_PRIMES_LIMIT: int = 10000
+_small_primes_cache: Optional[List[int]] = None
 
 # Contiguous memory pool for factorization results (pre-allocated)
-_factor_result_pool = {}  # {n: tuple of factors}
-_MAX_POOL_SIZE = 256
+_factor_result_pool: Dict[int, Tuple[int, ...]] = {}  # {n: tuple of factors}
+_MAX_POOL_SIZE: int = 256
 
-def _init_small_primes():
+def _init_small_primes() -> List[int]:
     """Initialize small primes sieve in contiguous memory."""
     global _small_primes_cache
     if _small_primes_cache is not None:
         return _small_primes_cache
     
     # Sieve of Eratosthenes for primes up to limit
-    limit = _SMALL_PRIMES_LIMIT
+    limit: int = _SMALL_PRIMES_LIMIT
     
     # Always use pure Python for small primes (avoids NumPy import overhead)
     # NumPy only benefits for very large sieves (>50K)
-    sieve = [True] * (limit + 1)
+    sieve: List[bool] = [True] * (limit + 1)
     sieve[0] = sieve[1] = False
     
     for i in range(2, int(math.isqrt(limit)) + 1):
@@ -78,11 +79,11 @@ def _init_small_primes():
     return _small_primes_cache
 
 @lru_cache(maxsize=1)
-def get_small_primes():
+def get_small_primes() -> Tuple[int, ...]:
     """Get pre-computed small primes from contiguous memory (memoized)."""
     return tuple(_init_small_primes())
 
-def batch_gcd(values: list[int], n: int) -> int:
+def batch_gcd(values: List[int], n: int) -> int:
     """
     Compute GCD of product of values with n.
     """
@@ -90,12 +91,12 @@ def batch_gcd(values: list[int], n: int) -> int:
         return n
     
     # Standard approach
-    prod = 1
+    prod: int = 1
     for v in values:
         prod = (prod * v) % n
     return math.gcd(prod, n)
 
-def _cache_result(n: int, factors: tuple[int, ...]):
+def _cache_result(n: int, factors: Tuple[int, ...]) -> None:
     """Store factorization result in contiguous memory pool."""
     global _factor_result_pool
     if len(_factor_result_pool) >= _MAX_POOL_SIZE:
@@ -103,18 +104,18 @@ def _cache_result(n: int, factors: tuple[int, ...]):
         _factor_result_pool.pop(next(iter(_factor_result_pool)))
     _factor_result_pool[n] = factors
 
-def _get_cached_result(n: int) -> tuple[int, ...] | None:
+def _get_cached_result(n: int) -> Optional[Tuple[int, ...]]:
     """Retrieve factorization from contiguous memory pool."""
     return _factor_result_pool.get(n)
 
-def _get_pool():
+def _get_pool() -> Pool:
     """Get or create global process pool (lazy initialization)."""
     global _pool
     if _pool is None:
         _pool = Pool(_pool_size)
     return _pool
 
-def _close_pool():
+def _close_pool() -> None:
     """Manually close the pool if it was created."""
     global _pool
     if _pool is not None:
@@ -122,7 +123,7 @@ def _close_pool():
         _pool.join()
         _pool = None
 
-def clear_caches():
+def clear_caches() -> None:
     """Clear all memoization caches. Useful between independent factorization runs."""
     global _small_primes_cache, _factor_result_pool
     is_prime.cache_clear()
@@ -137,7 +138,7 @@ def clear_caches():
 
 # Miller–Rabin primality test (memoized)
 @lru_cache(maxsize=128)
-def is_prime(n: int, bases: tuple[int, ...] =(2, 325, 9375, 28178, 450775, 9780504, 1795265022)) -> bool:
+def is_prime(n: int, bases: Tuple[int, ...] = (2, 325, 9375, 28178, 450775, 9780504, 1795265022)) -> bool:
     if n < 2:
         return False
     # small primes check
@@ -154,7 +155,7 @@ def is_prime(n: int, bases: tuple[int, ...] =(2, 325, 9375, 28178, 450775, 97805
         d >>= 1  # Faster than d //= 2
         s += 1
 
-    def check(a):
+    def check(a: int) -> bool:
         # Python's built-in pow with 3 args uses fast modular exponentiation
         x: int = pow(a, d, n)
         
@@ -175,8 +176,8 @@ def is_prime(n: int, bases: tuple[int, ...] =(2, 325, 9375, 28178, 450775, 97805
 
 # trial division up to some bound (memoized)
 @lru_cache(maxsize=64)
-def trial_division(n: int, bound: int=10000) -> tuple[list[int], int]:
-    factors: list[int] = []
+def trial_division(n: int, bound: int = 10000) -> Tuple[List[int], int]:
+    factors: List[int] = []
     
     # Handle 2 separately (using bit operations for speed)
     while (n & 1) == 0:  # Faster than n % 2 == 0
@@ -187,7 +188,7 @@ def trial_division(n: int, bound: int=10000) -> tuple[list[int], int]:
     
     # Use pre-computed small primes from contiguous memory
     if bound <= _SMALL_PRIMES_LIMIT:
-        small_primes = get_small_primes()
+        small_primes: Tuple[int, ...] = get_small_primes()
         # Binary search to find primes within bound
         for p in small_primes:
             if p > bound:
@@ -201,7 +202,7 @@ def trial_division(n: int, bound: int=10000) -> tuple[list[int], int]:
                 break
     else:
         # NumPy vectorized sieve of Eratosthenes (always faster)
-        sieve = np.ones(bound + 1, dtype=np.uint8)
+        sieve: np.ndarray = np.ones(bound + 1, dtype=np.uint8)
         sieve[0] = sieve[1] = 0
         
         # Vectorized sieve: mark multiples as composite
@@ -210,7 +211,7 @@ def trial_division(n: int, bound: int=10000) -> tuple[list[int], int]:
                 sieve[i*i::2*i] = 0
         
         # Test odd primes (vectorized indexing)
-        odd_indices = np.where(sieve[3::2])[0] * 2 + 3
+        odd_indices: np.ndarray = np.where(sieve[3::2])[0] * 2 + 3
         
         # Use SIMD version if available (2-5x speedup)
         if is_simd_available():
@@ -230,15 +231,15 @@ def trial_division(n: int, bound: int=10000) -> tuple[list[int], int]:
 # Elliptic Curve Method (ECM) implementation
 
 # Track ECM attempts for adaptive curve selection
-_ecm_attempt_stats = {}  # {n: [(B1, success_count, total_attempts), ...]}
-_ecm_stats_lock = None  # For thread safety if needed
+_ecm_attempt_stats: Dict[int, List[Tuple[int, int, int]]] = {}  # {n: [(B1, success_count, total_attempts), ...]}
+_ecm_stats_lock: Optional[object] = None  # For thread safety if needed
 
 @lru_cache(maxsize=16)
-def _ecm_cached(n: int, B1: int) -> int | None:
+def _ecm_cached(n: int, B1: int) -> Optional[int]:
     """Cached ECM with specific B1 bound."""
     return _ecm_impl(n, B1)
 
-def _batch_inverse(values: list[int], n: int) -> list[int]:
+def _batch_inverse(values: List[int], n: int) -> List[int]:
     """
     Batch modular inversion using Montgomery's trick with SIMD optimization.
     
@@ -1125,10 +1126,10 @@ def pollard_rho_brent(n: int, use_cache: bool = True) -> int:
 # Parallel Pollard Rho - runs multiple instances concurrently
 def pollard_rho_parallel(n: int) -> int:
     """Run multiple Pollard Rho instances in parallel to find a factor faster."""
-    pool = _get_pool()
+    pool: Pool = _get_pool()
     
     # Run multiple Pollard Rho attempts in parallel
-    results = pool.starmap(
+    results: List[int] = pool.starmap(
         _pollard_rho_wrapper,
         [(n, _) for _ in range(_pool_size)]
     )
@@ -1144,12 +1145,12 @@ def _pollard_rho_wrapper(n: int, _: int) -> int:
     return pollard_rho_brent(n)
 
 # recursive factorization helper
-def _factor_worker(n: int) -> list[int]:
+def _factor_worker(n: int) -> List[int]:
     """Worker function for parallel factorization (must be at module level)."""
     return factor_internal(n, use_parallel=False)
 
 # recursive factorization
-def factor(n: int, use_parallel: bool = False) -> list[int]:
+def factor(n: int, use_parallel: bool = False) -> List[int]:
     """
     Factorize n into prime factors.
     
@@ -1159,14 +1160,14 @@ def factor(n: int, use_parallel: bool = False) -> list[int]:
     Args:
         n: Integer to factorize
         use_parallel: Whether to use multiprocessing for large inputs (>10^12).
-                     Recommended for very large numbers. Default False to avoid overhead on small inputs.
+                      Recommended for very large numbers. Default False to avoid overhead on small inputs.
     
     Returns:
         List of prime factors in arbitrary order
     """
     return factor_internal(n, use_parallel=use_parallel)
 
-def factor_internal(n: int, use_parallel: bool = False) -> list[int]:
+def factor_internal(n: int, use_parallel: bool = False) -> List[int]:
     """Internal factorization function with parallelization support."""
     n = abs(n)
     if n == 1:
@@ -1185,26 +1186,26 @@ def factor_internal(n: int, use_parallel: bool = False) -> list[int]:
     # Try quadratic sieve for numbers in optimal range (10^8 - 10^12)
     if 10**8 <= rem <= 10**12:
         # Use parallelization for very large numbers in this range
-        qs_parallel = use_parallel and rem > 5 * 10**11
-        qs_factor = quadratic_sieve(rem, use_parallel=qs_parallel)
+        qs_parallel: bool = use_parallel and rem > 5 * 10**11
+        qs_factor: Optional[int] = quadratic_sieve(rem, use_parallel=qs_parallel)
         if qs_factor is not None:
             return small_factors + factor_internal(qs_factor, use_parallel=False) + factor_internal(rem // qs_factor, use_parallel=False)
     
     # Try ECM for numbers in 10^12 - 10^18 range (before Pollard Rho)
     if 10**12 <= rem <= 10**18:
-        ecm_factor = _ecm_attempt(rem, use_parallel=use_parallel)
+        ecm_factor: Optional[int] = _ecm_attempt(rem, use_parallel=use_parallel)
         if ecm_factor is not None:
             return small_factors + factor_internal(ecm_factor, use_parallel=False) + factor_internal(rem // ecm_factor, use_parallel=False)
     
     # if still composite, use Pollard Rho (with memoization and optional parallelization)
-    use_parallel_rho = use_parallel and rem > 10**12  # Parallel for very large inputs
+    use_parallel_rho: bool = use_parallel and rem > 10**12  # Parallel for very large inputs
     
     if use_parallel_rho:
-        d = pollard_rho_parallel(rem)
+        d: int = pollard_rho_parallel(rem)
     else:
-        d = rem
+        d: int = rem
         # try pollard until nontrivial (with memoization)
-        attempt = 0
+        attempt: int = 0
         while d == rem and attempt < 5:
             d = pollard_rho_brent(rem, use_cache=True)  # Use memoization
             attempt += 1
@@ -1215,14 +1216,14 @@ def factor_internal(n: int, use_parallel: bool = False) -> list[int]:
     
     # Parallel recursive factorization for large factors
     if use_parallel and rem > 10**12:
-        pool = _get_pool()
-        results = pool.map(_factor_worker, [d, rem // d])
+        pool: Pool = _get_pool()
+        results: List[List[int]] = pool.map(_factor_worker, [d, rem // d])
         return small_factors + results[0] + results[1]
     else:
         return small_factors + factor_internal(d, use_parallel=False) + factor_internal(rem // d, use_parallel=False)
 
 @lru_cache(maxsize=256)
-def _factor_impl(n: int) -> tuple[int, ...]:
+def _factor_impl(n: int) -> Tuple[int, ...]:
     """Cached factorization implementation (returns tuple for hashability)."""
     return tuple(factor_internal(n, use_parallel=False))
 
