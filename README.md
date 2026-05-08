@@ -7,12 +7,14 @@ A high-performance Python library for integer factorization using trial division
 ## Features
 
 ### Core Algorithms
+
 - **Trial Division**: Fast factorization of small factors with NumPy vectorization
 - **Pollard Rho (Brent)**: Efficient factor discovery for medium-sized composites
 - **Elliptic Curve Method (ECM)**: Advanced algorithm for numbers 10¹² - 10¹⁸
 - **Quadratic Sieve**: O(exp(√(log n log log n))) for 10⁸ - 10¹² range
 
 ### Optimizations
+
 - **SIMD Vectorization**: NumPy and Numba JIT compilation
   - Trial Division: 2-5x speedup (Numba JIT)
   - Batch Inverse: 3-7x speedup (NumPy vectorized)
@@ -23,6 +25,7 @@ A high-performance Python library for integer factorization using trial division
 - **SciPy Sparse**: 13x faster Gaussian elimination for Quadratic Sieve
 
 ### Performance
+
 - Quadratic Sieve: 2-10x faster than Pollard Rho for 10¹⁰ - 10¹²
 - NumPy sieve: 54x faster than pure Python
 - Sparse GF(2) elimination: 13x faster than dense
@@ -99,11 +102,11 @@ pytest test_simd.py -v
 def factor(n: int, use_parallel: bool = False) -> list[int]:
     """
     Factorize n into prime factors.
-    
+
     Args:
         n: Integer to factorize
         use_parallel: Use multiprocessing for large inputs (>10^12)
-    
+
     Returns:
         List of prime factors in arbitrary order
     """
@@ -134,21 +137,25 @@ def clear_caches()
 ## SIMD Implementation
 
 ### Trial Division SIMD
+
 - **Method**: Numba JIT compilation
 - **Expected Speedup**: 2-5x
 - **Threshold**: Always active when Numba available
 
 ### Batch Inverse SIMD
+
 - **Method**: NumPy vectorization
 - **Expected Speedup**: 3-7x
 - **Threshold**: Batch size > 10
 
 ### ECM Point Operations SIMD
+
 - **Method**: Vectorized multi-curve processing
 - **Expected Speedup**: 4-10x (4+ curves simultaneously)
 - **Operations**: Point doubling, addition, scalar multiplication
 
 ### Modular Arithmetic SIMD
+
 - **Method**: Numba @vectorize decorator
 - **Functions**: mod_add, mod_sub, mod_mul, mod_exp_simd
 - **Expected Speedup**: 2-4x
@@ -157,31 +164,35 @@ def clear_caches()
 
 The library automatically selects the best algorithm based on input size:
 
-| Range | Primary Algorithm | Alternative |
-|-------|------------------|--------------|
-| < 10⁸ | Trial Division + Pollard Rho | ECM |
-| 10⁸ - 10¹² | Quadratic Sieve | ECM |
-| 10¹² - 10¹⁸ | ECM | Pollard Rho |
-| > 10¹⁸ | Pollard Rho | ECM |
+| Range       | Primary Algorithm            | Alternative |
+| ----------- | ---------------------------- | ----------- |
+| < 10⁸       | Trial Division + Pollard Rho | ECM         |
+| 10⁸ - 10¹²  | Quadratic Sieve              | ECM         |
+| 10¹² - 10¹⁸ | ECM                          | Pollard Rho |
+| > 10¹⁸      | Pollard Rho                  | ECM         |
 
 ## Performance Examples
 
 ### Small Composites
+
 ```python
 factor(30030)  # [2, 3, 5, 7, 11, 13] - ~1-2ms
 ```
 
 ### Medium Numbers (10¹⁰ range)
+
 ```python
 factor(10**10 + 39)  # Non-trivial factor found - ~10-100ms
 ```
 
 ### Large Numbers (10¹² range)
+
 ```python
 factor(10**12 + 39)  # Uses Quadratic Sieve - ~100-500ms
 ```
 
 ### Very Large Numbers (10¹⁵+ with parallelization)
+
 ```python
 factor(10**15 + 37, use_parallel=True)  # Multiprocessing - ~1-10s
 ```
@@ -189,14 +200,17 @@ factor(10**15 + 37, use_parallel=True)  # Multiprocessing - ~1-10s
 ## Dependencies
 
 ### Required
+
 - Python 3.8+
 - NumPy >= 1.19
 
 ### Optional
+
 - Numba >= 0.52 (for JIT acceleration)
 - SciPy >= 1.0 (for sparse matrix operations in Quadratic Sieve)
 
 ### Fallback Behavior
+
 - Without Numba: SIMD operations gracefully fall back to NumPy/pure Python
 - Without SciPy: Quadratic Sieve uses dense matrix operations
 - Always works on any Python 3.8+ system with NumPy
@@ -204,6 +218,7 @@ factor(10**15 + 37, use_parallel=True)  # Multiprocessing - ~1-10s
 ## Architecture
 
 ### Module Structure
+
 ```
 factorization.py (1200 lines)
 ├── Trial Division (vectorized with NumPy)
@@ -224,6 +239,7 @@ test_simd.py (500 lines, 29 tests)
 ```
 
 ### Test Coverage
+
 - **101 total tests** (72 existing + 29 SIMD)
 - **100% pass rate**
 - Edge cases, correctness, performance benchmarks included
@@ -231,18 +247,21 @@ test_simd.py (500 lines, 29 tests)
 ## Optimization Features
 
 ### Memoization (@lru_cache)
+
 - `is_prime()`: 128 entry cache
 - `trial_division()`: 64 entry cache
 - `_ecm_cached()`: 16 entry cache
 - Overall: 55x speedup on repeated calls
 
 ### Parallelization
+
 - Multiprocessing Pool (4 workers default)
 - Parallel Pollard Rho
 - Parallel recursive factorization
 - Threshold: Only for n > 10¹² (overhead cost)
 
 ### Memory Efficiency
+
 - Contiguous memory for small primes
 - Lazy NumPy loading for large operations
 - Pre-allocated factor result pool (256 entries)
